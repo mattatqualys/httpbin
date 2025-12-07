@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - 'v*'   # triggers for tags like v1.0.0
   workflow_dispatch:
 
 jobs:
@@ -32,18 +34,22 @@ jobs:
         chmod +x qscanner
 
     - name: Run QScanner repo scan
+      if: github.ref == 'refs/heads/master'
       run: |
         ./qscanner --pod UK1 repo https://github.com/mattatqualys/httpbin.git --report-format sarif
 
     - name: Build Docker image
+      if: startsWith(github.ref, 'refs/tags/v')
       run: |
         docker build -t httpbin-demo:latest .
 
     - name: Scan Docker image
+      if: startsWith(github.ref, 'refs/tags/v')
       run: |
         ./qscanner --pod UK1 image httpbin-demo:latest --report-format sarif
 
     - name: Upload SARIF to GitHub
+      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: ./qscanner-ScanResult.sarif
