@@ -1,45 +1,50 @@
-name: QScanner Repo Demo
+name: QScanner CI/CD Demo
 
 on:
   push:
-    branches: [master]
-  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
 
 jobs:
-  scan:
+  qscanner:
     runs-on: ubuntu-latest
+
     env:
-      # Access token for QScanner, stored in GitHub Secrets
       QUALYS_ACCESS_TOKEN: ${{ secrets.QUALYS_ACCESS_TOKEN }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Install GitHub CLI
+      run: |
+        sudo apt update
+        sudo apt install -y gh
 
-      - name: Install QScanner
-        run: |
-          # Replace this with your actual QScanner install method
-          curl -sSL https://example.com/qscanner/install.sh | bash
-          ./qscanner --version
+    - name: Authenticate GitHub CLI
+      run: |
+        echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
 
-      - name: Run Repo Scan
-        run: |
-          # QScanner will automatically use QUALYS_ACCESS_TOKEN from the env
-          ./qscanner --pod UK1 repo https://github.com/postmanlabs/httpbin.git --report-format sarif
+    - name: Download QScanner
+      run: |
+        gh release download v4.8.0-442-dev -R mattatqualys/qscanner-binary
+        chmod +x qscanner
 
-      - name: Find SARIF file
-        id: find_sarif
-        run: |
-          SARIF_PATH=$(find . -name "*-Report.sarif.json" | head -n 1)
-          echo "SARIF_PATH=$SARIF_PATH" >> $GITHUB_ENV
-          echo "Found SARIF at $SARIF_PATH"
+    - name: Run QScanner repo scan
+      run: |
+        ./qscanner --pod UK1 repo https://github.com/mattatqualys/httpbin.git --report-format sarif
 
-      - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: ${{ env.SARIF_PATH }}
+    - name: Build Docker image
+      run: |
+        docker build -t httpbin-demo:latest .
+
+    - name: Scan Docker image
+      run: |
+        ./qscanner --pod UK1 image httpbin-demo:latest --report-format sarif
+
+    - name: Upload SARIF to GitHub
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: ./qscanner-ScanResult.sarif
+
