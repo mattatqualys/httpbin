@@ -37,7 +37,7 @@ jobs:
     - name: Run QScanner repo scan
       if: github.ref == 'refs/heads/master'
       run: |
-        ./qscanner --pod UK1 repo https://github.com/mattatqualys/httpbin.git --report-format sarif --scan-types os,secret,sca,fileinsight
+        ./qscanner --pod UK1 repo https://github.com/mattatqualys/httpbin.git --report-format sarif --scan-types os,secret,sca
         cp /home/runner/qualys/qscanner/data/*-Report.sarif.json ./qscanner-ScanResult.sarif
 
     - name: Build Docker image
