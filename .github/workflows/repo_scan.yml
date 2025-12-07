@@ -14,6 +14,7 @@ jobs:
 
     env:
       QUALYS_ACCESS_TOKEN: ${{ secrets.QUALYS_ACCESS_TOKEN }}
+      IMAGE_NAME: mattatqualys/httpbin
 
     steps:
     - name: Checkout code
@@ -42,13 +43,25 @@ jobs:
     - name: Build Docker image
       if: startsWith(github.ref, 'refs/tags/v')
       run: |
-        docker build -t httpbin-demo:latest .
+        docker build -t $IMAGE_NAME:latest .
 
     - name: Scan Docker image
       if: startsWith(github.ref, 'refs/tags/v')
       run: |
-        ./qscanner --pod UK1 image httpbin-demo:latest --report-format sarif
+        ./qscanner --pod UK1 image $IMAGE_NAME:latest --report-format sarif
         cp /home/runner/qualys/qscanner/data/*-Report.sarif.json ./qscanner-DockerScan.sarif
+
+    - name: Log in to Docker Hub
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Push Docker image
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        docker push $IMAGE_NAME:latest
 
     - name: Upload SARIF for repo scan
       if: github.ref == 'refs/heads/master'
@@ -61,4 +74,3 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: ./qscanner-DockerScan.sarif
-
