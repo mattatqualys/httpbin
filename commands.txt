@@ -1,0 +1,8 @@
+# Repo Scanning Only
+
+git commit --allow-empty -m "Trigger QScanner workflow"\ngit push origin master
+git push
+
+# Repo and image scanning
+git tag -a v1.0.3 -m "Step version"
+git push --tags
