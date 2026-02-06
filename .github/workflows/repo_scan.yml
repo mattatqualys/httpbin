@@ -31,7 +31,7 @@ jobs:
 
     - name: Download QScanner
       run: |
-        gh release download v4.8.0-442-dev -R mattatqualys/qscanner-binary
+        gh release download v4.7.0-1 -R mattatqualys/qscanner-binary
         chmod +x qscanner
 
     - name: Run QScanner repo scan
@@ -72,9 +72,9 @@ jobs:
     # Post-process SARIF so GitHub Code Scanning picks up severity and CVE IDs.
     # qscanner stores the CVSS base score in properties.cvss3Info.baseScore and
     # CVE identifiers in properties["cve-ids"], but GitHub expects the score in
-    # properties["security-severity"] and shows whatever is in message.text.
-    # The jq filter below copies the score into the standard field and appends
-    # CVE IDs to each result message.
+    # properties["security-severity"] and uses rule.shortDescription.text as the
+    # alert title. The jq filter below copies the score into the standard field
+    # and prepends CVE IDs to shortDescription and message.text.
     - name: Transform repo scan SARIF for GitHub
       if: github.ref == 'refs/heads/master'
       run: |
@@ -83,14 +83,18 @@ jobs:
             (.tool.driver.rules // []) as $rules |
             .tool.driver.rules = [
               $rules[] |
-              .properties["security-severity"] = (.properties.cvss3Info.baseScore // null)
+              .properties["security-severity"] = (.properties.cvss3Info.baseScore // null) |
+              (.properties["cve-ids"] // []) as $cves |
+              if ($cves | length) > 0 then
+                .shortDescription.text = (($cves | join(", ")) + ": " + .shortDescription.text)
+              else . end
             ] |
             .results = [
               .results[] |
               . as $r |
               ($rules[$r.ruleIndex].properties["cve-ids"] // []) as $cves |
               if ($cves | length) > 0 then
-                .message.text = (.message.text + " (" + ($cves | join(", ")) + ")")
+                .message.text = (($cves | join(", ")) + ": " + .message.text)
               else . end
             ]
           )
@@ -105,14 +109,18 @@ jobs:
             (.tool.driver.rules // []) as $rules |
             .tool.driver.rules = [
               $rules[] |
-              .properties["security-severity"] = (.properties.cvss3Info.baseScore // null)
+              .properties["security-severity"] = (.properties.cvss3Info.baseScore // null) |
+              (.properties["cve-ids"] // []) as $cves |
+              if ($cves | length) > 0 then
+                .shortDescription.text = (($cves | join(", ")) + ": " + .shortDescription.text)
+              else . end
             ] |
             .results = [
               .results[] |
               . as $r |
               ($rules[$r.ruleIndex].properties["cve-ids"] // []) as $cves |
               if ($cves | length) > 0 then
-                .message.text = (.message.text + " (" + ($cves | join(", ")) + ")")
+                .message.text = (($cves | join(", ")) + ": " + .message.text)
               else . end
             ]
           )
