@@ -69,6 +69,56 @@ jobs:
         docker push $IMAGE_NAME:latest
         docker push $IMAGE_NAME:$TAG_NAME
 
+    # Post-process SARIF so GitHub Code Scanning picks up severity and CVE IDs.
+    # qscanner stores the CVSS base score in properties.cvss3Info.baseScore and
+    # CVE identifiers in properties["cve-ids"], but GitHub expects the score in
+    # properties["security-severity"] and shows whatever is in message.text.
+    # The jq filter below copies the score into the standard field and appends
+    # CVE IDs to each result message.
+    - name: Transform repo scan SARIF for GitHub
+      if: github.ref == 'refs/heads/master'
+      run: |
+        jq '
+          .runs[] |= (
+            (.tool.driver.rules // []) as $rules |
+            .tool.driver.rules = [
+              $rules[] |
+              .properties["security-severity"] = (.properties.cvss3Info.baseScore // null)
+            ] |
+            .results = [
+              .results[] |
+              . as $r |
+              ($rules[$r.ruleIndex].properties["cve-ids"] // []) as $cves |
+              if ($cves | length) > 0 then
+                .message.text = (.message.text + " (" + ($cves | join(", ")) + ")")
+              else . end
+            ]
+          )
+        ' ./qscanner-ScanResult.sarif > ./qscanner-ScanResult-transformed.sarif
+        mv ./qscanner-ScanResult-transformed.sarif ./qscanner-ScanResult.sarif
+
+    - name: Transform Docker scan SARIF for GitHub
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        jq '
+          .runs[] |= (
+            (.tool.driver.rules // []) as $rules |
+            .tool.driver.rules = [
+              $rules[] |
+              .properties["security-severity"] = (.properties.cvss3Info.baseScore // null)
+            ] |
+            .results = [
+              .results[] |
+              . as $r |
+              ($rules[$r.ruleIndex].properties["cve-ids"] // []) as $cves |
+              if ($cves | length) > 0 then
+                .message.text = (.message.text + " (" + ($cves | join(", ")) + ")")
+              else . end
+            ]
+          )
+        ' ./qscanner-DockerScan.sarif > ./qscanner-DockerScan-transformed.sarif
+        mv ./qscanner-DockerScan-transformed.sarif ./qscanner-DockerScan.sarif
+
     - name: Upload SARIF for repo scan
       if: github.ref == 'refs/heads/master'
       uses: github/codeql-action/upload-sarif@v3
